@@ -3,6 +3,7 @@
 
 #include "FEXBridge.h"
 #include "JITAllocator.h"
+#include <TargetConditionals.h>
 
 // Xcode defines DEBUG=1 in debug builds which conflicts with FEX's LogMan::DEBUG enum
 #ifdef DEBUG
@@ -113,6 +114,15 @@ static bool is_in_jit_pool(void *addr) {
 // Initialize the JIT pool using Strategy 2 (debugger-allocated RX + vm_remap RW)
 static bool jit_pool_init(void) {
     if (g_jit_rx_base) return true; // Already initialized
+
+#if TARGET_OS_SIMULATOR
+    // FEX writes through an RW alias of this RX pool. macOS on Apple Silicon
+    // forbids writable aliases of executable memory; trying one (anonymous RX
+    // mmap + vm_remap RW) is the suspected trigger of the 2026-09-28 kernel
+    // panic on the M4 dev Mac. Never attempt it on the host. See ios/README.md.
+    fex_log("FAIL: no dual-mapped JIT in the Simulator (device debugger path only)");
+    return false;
+#endif
 
     if (!jit_check_debugged()) {
         fex_log("Cannot init JIT pool: debugger not attached");
@@ -433,6 +443,11 @@ bool fex_initialize(void) {
     Features.DCacheLineSize = 64;
     Features.ICacheLineSize = 64;
     Features.SupportsCacheMaintenanceOps = true;
+#if TARGET_OS_SIMULATOR
+    // Use conservative ARM64 code generation on the Mac instead of claiming
+    // the optional instruction set of the development iPhone.
+    Features.CPUMIDRs.resize(1, 0);
+#else
     Features.SupportsAES = true;
     Features.SupportsCRC = true;
     Features.SupportsAtomics = true;  // ARMv8.1 LSE
@@ -448,6 +463,7 @@ bool fex_initialize(void) {
     Features.SupportsSVE256 = false;
     // A15 has 6 performance + 2 efficiency cores
     Features.CPUMIDRs.resize(8, 0x611F0250); // A15 Firestorm MIDR (approximate)
+#endif
 
     fex_log("Creating FEXCore context...");
 
@@ -471,7 +487,7 @@ bool fex_initialize(void) {
     g_ctx->SetSyscallHandler(&g_syscall_handler);
 
     // Step 8: Enable hardware TSO (Apple Silicon supports TSO mode)
-    g_ctx->SetHardwareTSOSupport(true);
+    g_ctx->SetHardwareTSOSupport(!TARGET_OS_SIMULATOR);
 
     // Step 9: Initialize core (creates Dispatcher)
     fex_log("Initializing FEXCore core (creates Dispatcher)...");
@@ -731,8 +747,7 @@ int64_t fex_test_execute(void) {
     fex_log("Frame RIP=0x%llx, RSP=0x%llx",
             (unsigned long long)Thread->CurrentFrame->State.rip,
             (unsigned long long)Thread->CurrentFrame->State.gregs[FEXCore::X86State::REG_RSP]);
-    fex_log("InterruptFaultPage at %p (value=%d)",
-            &Thread->InterruptFaultPage, Thread->InterruptFaultPage);
+    fex_log("InterruptFaultPage at %p", Thread->InterruptFaultPage);
     fex_log("SyscallHandlerObj=%p, SyscallHandlerFunc=%p",
             (void*)Thread->CurrentFrame->Pointers.SyscallHandlerObj,
             (void*)Thread->CurrentFrame->Pointers.SyscallHandlerFunc);
@@ -762,7 +777,6 @@ int64_t fex_test_execute(void) {
         }
         fex_log("WATCHDOG: Execution timed out after 5s!");
     });
-    watchdog.detach();
 
     fex_log("Executing x86-64 code through FEXCore...");
 
@@ -777,6 +791,7 @@ int64_t fex_test_execute(void) {
     }
 
     execution_done.store(true);
+    watchdog.join(); // Captured stack state must outlive the watchdog.
 
     g_exit_jmp_set = false;
 

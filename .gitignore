@@ -147,3 +147,5 @@ research/madeira-d3d12/tests/offline/sm51/
 # build/wine-i386/build.sh (docs/WOW64.md section 9); it is not committed.
 app/Madeira/i386-windows/*
 !app/Madeira/i386-windows/.gitkeep
+# Generated from app/civ-simulator.yml
+app/CivSimulator.xcodeproj/

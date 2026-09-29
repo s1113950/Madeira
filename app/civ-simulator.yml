@@ -1,0 +1,47 @@
+name: CivSimulator
+options:
+  deploymentTarget:
+    iOS: '17.0'
+settings:
+  base:
+    ARCHS: arm64
+    SUPPORTED_PLATFORMS: iphonesimulator
+    SDKROOT: iphonesimulator
+    CODE_SIGNING_ALLOWED: NO
+    CLANG_CXX_LANGUAGE_STANDARD: c++20
+    SWIFT_VERSION: '5.0'
+    ENABLE_DEBUG_DYLIB: NO
+    FEX_BUILD: $(SRCROOT)/../../build/fex-simulator
+    HEADER_SEARCH_PATHS:
+      - $(SRCROOT)/Madeira
+      - $(SRCROOT)/../FEX/FEXCore/include
+      - $(SRCROOT)/../FEX/FEXHeaderUtils
+      - $(SRCROOT)/../FEX/CodeEmitter
+      - $(SRCROOT)/../FEX/External/fmt/include
+      - $(SRCROOT)/../FEX/External/range-v3/include
+      - $(SRCROOT)/../FEX/External/unordered_dense/include
+      - $(FEX_BUILD)
+      - $(FEX_BUILD)/include
+      - $(FEX_BUILD)/FEXCore/Source
+    LIBRARY_SEARCH_PATHS:
+      - $(FEX_BUILD)/FEXCore/Source
+      - $(FEX_BUILD)/External/fmt
+      - $(FEX_BUILD)/External/cephes
+      - $(FEX_BUILD)/External/xxhash/cmake_unofficial
+      - $(FEX_BUILD)/External/SoftFloat-3e
+    OTHER_LDFLAGS: '-lFEXCore -lFEXCore_Base -lfmt -lcephes_128bit -lxxhash -lsoftfloat_3e -lJemallocLibs'
+targets:
+  CivSimulator:
+    type: application
+    platform: iOS
+    sources:
+      - path: CivSimulator
+      - path: Madeira/FEXBridge.mm
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.s1113950.civ4.simulator
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: $(SRCROOT)/CivSimulator/Bridge.h
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        TARGETED_DEVICE_FAMILY: '1,2'

@@ -1454,6 +1454,19 @@ struct ContentView: View {
                 // Args are overridable at runtime from Documents/madeira-args.txt
                 // so UE4 flags can be tried without a rebuild; the string below is
                 // the default when that file is absent.
+                Button("Configured game / probe") {
+                    guard let exe = MadeiraConfig.get("env.MADEIRA_EXE"), !exe.isEmpty else {
+                        logStore.log("Set env.MADEIRA_EXE in Documents/madeira.cfg first.", level: .error)
+                        return
+                    }
+                    setenv("MADEIRA_EXE", exe, 1)
+                    setenv("MADEIRA_ARGS", MadeiraConfig.get("args") ?? "", 1)
+                    unsetenv("MADEIRA_DESKTOP")
+                    logStore.log("Configured launch: \(exe)")
+                    runWineFullSequence()
+                }
+                .buttonStyle(.borderedProminent)
+
                 Button("Stray (UE4, -dx11)") {
                     setenv("MADEIRA_EXE",
                            "C:\\Program Files\\Stray\\Hk_project\\Binaries\\Win64\\Stray-Win64-Shipping.exe", 1)
